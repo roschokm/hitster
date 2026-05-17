@@ -238,6 +238,53 @@
   }
   .err{ color:#fff; background:var(--rood); padding:4px 8px; border-radius:4px; }
 
+  /* === Scan succesvol toast === */
+  .success-toast{
+    position:fixed;
+    top:20px; left:50%;
+    transform:translate(-50%, -150%);
+    background:var(--groen);
+    color:white;
+    padding:12px 24px;
+    border-radius:40px;
+    font-family:'Permanent Marker',cursive;
+    font-size:24px;
+    box-shadow:0 6px 0 #1b4d10;
+    border:3px solid white;
+    z-index:10000;
+    transition:transform .35s cubic-bezier(.16,1.2,.6,1);
+    display:flex; align-items:center; gap:10px;
+    pointer-events:none;
+  }
+  .success-toast.show{ transform:translate(-50%, 0); }
+  .success-toast .thumb{ font-size:32px; line-height:1; }
+
+  /* Prominentere Spotify-fallback */
+  .spotify-fallback{
+    margin-top:14px;
+    text-align:center;
+    background:rgba(255,255,255,.95);
+    padding:14px;
+    border-radius:10px;
+    border:2px dashed #333;
+  }
+  .spotify-fallback .msg{
+    font-family:'Permanent Marker',cursive;
+    color:var(--paars);
+    font-size:18px;
+    margin-bottom:8px;
+  }
+  .spotify-fallback .open-btn{
+    display:inline-block;
+    background:#1DB954; color:white;
+    padding:10px 20px; border-radius:30px;
+    font-family:'Permanent Marker',cursive;
+    font-size:20px;
+    text-decoration:none;
+    box-shadow:0 4px 0 #0d6928;
+    border:2px solid white;
+  }
+
   /* === "Scan volgende kaart" knop === */
   .btn-scan{
     display:inline-block;
@@ -374,6 +421,12 @@
 
 <audio id="audio" preload="auto" playsinline></audio>
 
+<!-- Scan-succes toast -->
+<div class="success-toast" id="successToast" aria-live="polite">
+  <span class="thumb">👍</span>
+  <span>Scan succesvol!</span>
+</div>
+
 <!-- Camera scanner overlay -->
 <div class="scanner" id="scanner" aria-hidden="true">
   <button class="close-btn" id="scanClose" aria-label="Sluiten">×</button>
@@ -406,6 +459,9 @@
   let song = null;
   let timerId = null;
 
+  // Toon meteen "Scan succesvol" als de pagina geopend wordt met een code
+  showSuccessToast();
+
   fetch('songs.json', {cache:'no-store'})
     .then(r => { if(!r.ok) throw new Error('songs.json kon niet geladen worden ('+r.status+')'); return r.json(); })
     .then(db => {
@@ -415,10 +471,10 @@
 
       if(song.previewUrl){
         audio.src = song.previewUrl;
-        status.textContent = 'Klaar om te luisteren';
+        tryAutoplay();
       } else if(song.title && song.artist){
         return findItunesPreview(song.title, song.artist).then(url => {
-          if(url){ audio.src = url; status.textContent = 'Klaar om te luisteren'; }
+          if(url){ audio.src = url; tryAutoplay(); }
           else showSpotifyFallback();
         });
       } else {
@@ -429,6 +485,13 @@
       status.innerHTML = '<span class="err">'+err.message+'</span>';
       btn.style.display = 'none';
     });
+
+  function showSuccessToast(){
+    const t = document.getElementById('successToast');
+    if(!t) return;
+    requestAnimationFrame(() => t.classList.add('show'));
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
 
   function findItunesPreview(title, artist){
     const q = encodeURIComponent(title + ' ' + artist);
@@ -445,13 +508,43 @@
   }
 
   function showSpotifyFallback(){
-    if(song && song.spotify){
-      status.textContent = 'Geen preview gevonden.';
-      fallback.innerHTML = '<a class="fb" href="https://open.spotify.com/track/'+song.spotify+'">Open in Spotify →</a>';
-    } else {
-      status.innerHTML = '<span class="err">Geen audio.</span>';
-    }
     btn.style.display = 'none';
+    if(song && song.spotify){
+      fallback.innerHTML =
+        '<div class="spotify-fallback">' +
+          '<div class="msg">Geen Apple Music preview gevonden</div>' +
+          '<a class="open-btn" href="https://open.spotify.com/track/'+song.spotify+'" target="_blank" rel="noopener">▶ Open op Spotify</a>' +
+        '</div>';
+      status.textContent = '';
+    } else {
+      status.innerHTML = '<span class="err">Geen audio beschikbaar voor dit nummer.</span>';
+    }
+  }
+
+  function startPlaying(){
+    btn.style.display = 'none';
+    btnStop.style.display = 'inline-block';
+    bars.style.display = 'flex';
+    status.textContent = 'Luister... raad het jaar!';
+    let secs = 30;
+    timer.textContent = secs;
+    clearInterval(timerId);
+    timerId = setInterval(() => {
+      secs--;
+      if(secs <= 0){ clearInterval(timerId); timer.textContent = ''; }
+      else timer.textContent = secs;
+    }, 1000);
+  }
+
+  function tryAutoplay(){
+    if(!audio.src) return;
+    audio.currentTime = 0;
+    audio.play()
+      .then(() => startPlaying())
+      .catch(() => {
+        // Autoplay geblokkeerd door browser — gebruiker moet zelf op play tikken
+        status.textContent = 'Tik op ▶ om te starten';
+      });
   }
 
   function resetToReady(replay){
@@ -474,22 +567,11 @@
   btn.addEventListener('click', () => {
     if(!audio.src){ return; }
     audio.currentTime = 0;
-    audio.play().then(() => {
-      btn.style.display = 'none';
-      btnStop.style.display = 'inline-block';
-      bars.style.display = 'flex';
-      status.textContent = 'Luister... raad het jaar!';
-      let secs = 30;
-      timer.textContent = secs;
-      clearInterval(timerId);
-      timerId = setInterval(() => {
-        secs--;
-        if(secs <= 0){ clearInterval(timerId); timer.textContent = ''; }
-        else timer.textContent = secs;
-      }, 1000);
-    }).catch(err => {
-      status.innerHTML = '<span class="err">Kon niet afspelen: '+err.message+'</span>';
-    });
+    audio.play()
+      .then(() => startPlaying())
+      .catch(err => {
+        status.innerHTML = '<span class="err">Kon niet afspelen: '+err.message+'</span>';
+      });
   });
 
   btnStop.addEventListener('click', () => {
