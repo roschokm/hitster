@@ -88,21 +88,35 @@ def make_card_back(title: str, artist: str, year: str|int, out: Path):
     d.text((W//2, 790), artist, fill="white", font=get_font(70), anchor="mm")
     img.save(out)
 
+def _entry_track_id(v):
+    """songs.json mag oude (string) of nieuwe (object) entries bevatten."""
+    if isinstance(v, str): return v
+    if isinstance(v, dict): return v.get("spotify")
+    return None
+
 def add_song(title: str, artist: str, year, spotify: str, base_url: str):
     track_id = extract_track_id(spotify)
     db = load_json(SONGS_PATH, {})
     # Zoek of dit nummer al bestaat
+    code = None
     for k, v in db.items():
         if k.startswith("_"): continue
-        if v == track_id:
-            print(f"Al aanwezig als code {k!r} — bestanden worden opnieuw gegenereerd.")
+        if _entry_track_id(v) == track_id:
+            print(f"Al aanwezig als code {k!r} — entry & bestanden worden bijgewerkt.")
             code = k
             break
-    else:
+    if code is None:
         used = {k for k in db.keys() if not k.startswith("_")}
         code = short_code(used)
-        db[code] = track_id
-        save_json(SONGS_PATH, db)
+
+    # Schrijf altijd in de nieuwe objectvorm (title/artist/year/spotify)
+    db[code] = {
+        "title":   title,
+        "artist":  artist,
+        "year":    int(year) if str(year).isdigit() else year,
+        "spotify": track_id,
+    }
+    save_json(SONGS_PATH, db)
 
     redirect = f"{base_url.rstrip('/')}/?s={code}"
     safe = re.sub(r"[^a-z0-9]+", "_", f"{artist}_{title}".lower()).strip("_")[:60]

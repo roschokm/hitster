@@ -2,53 +2,366 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<!-- Bewust nietszeggende titel: zo geeft de telefoon-preview niets weg. -->
 <title>K</title>
 <meta name="robots" content="noindex,nofollow">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Patrick+Hand&display=swap" rel="stylesheet">
 <style>
-  html,body{margin:0;height:100%;background:#000;color:#fff;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center}
-  .box{text-align:center;padding:24px}
-  .dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#1DB954;animation:p 1s infinite alternate}
-  @keyframes p{from{opacity:.3}to{opacity:1}}
-  a{color:#1DB954}
+  :root{
+    --paars:#6e3bb3;
+    --blauw:#2da6df;
+    --groen:#8bcd3c;
+    --rood:#e83a3a;
+    --geel:#f0c800;
+    --oranje:#f06430;
+    --cyaan:#1aa8c4;
+    --roze:#d8327a;
+    --donkerblauw:#2147a8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;min-height:100%}
+  body{
+    background:#fefcf4;
+    background-image: repeating-linear-gradient(to bottom,
+      transparent 0, transparent 36px,
+      #c5dff0 36px, #c5dff0 37px);
+    font-family:'Patrick Hand','Comic Sans MS',sans-serif;
+    color:#222;
+    padding:18px 14px 40px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .sheet{
+    max-width:420px;
+    margin:0 auto;
+    position:relative;
+  }
+  /* Marker krullen aan de rand, net als in de tekening */
+  .doodle{
+    position:absolute; left:-6px; color:var(--geel);
+    font-size:32px; line-height:1;
+    transform:rotate(-12deg); pointer-events:none;
+    font-family:'Permanent Marker';
+  }
+  .doodle.d1{ top:30px; }
+  .doodle.d2{ top:200px; color:var(--geel); transform:rotate(15deg); }
+  .doodle.d3{ top:370px; color:var(--geel); transform:rotate(-8deg); }
+
+  .card{
+    border:2px solid #333;
+    border-radius:6px;
+    background:#fefefe;
+    padding:18px 18px 22px;
+    position:relative;
+    box-shadow:0 2px 0 #00000010;
+  }
+
+  /* HITSTER-banner */
+  .banner{
+    position:relative;
+    background:
+      linear-gradient(90deg, var(--paars) 0 30%, var(--blauw) 30% 100%);
+    padding:10px 14px 14px;
+    text-align:center;
+    transform:rotate(-1.5deg);
+    margin-bottom:8px;
+    border-radius:3px;
+  }
+  .banner .h{
+    font-family:'Permanent Marker',cursive;
+    font-size:54px;
+    color:var(--groen);
+    letter-spacing:2px;
+    line-height:1;
+    text-shadow: 1px 1px 0 #4d7a1f;
+  }
+  .age{
+    position:absolute; top:-6px; right:6px;
+    color:var(--rood);
+    font-family:'Permanent Marker',cursive;
+    font-size:24px;
+    transform:rotate(12deg);
+  }
+
+  .kidsbij{
+    text-align:center;
+    margin:14px 0 6px;
+    font-family:'Permanent Marker',cursive;
+    font-size:36px;
+    letter-spacing:1px;
+  }
+  .kidsbij .kids{ color:var(--geel); }
+  .kidsbij .bij{ color:var(--oranje); margin-left:8px; }
+
+  .kiki{
+    text-align:center;
+    font-family:'Permanent Marker',cursive;
+    font-size:96px;
+    color:var(--cyaan);
+    line-height:.9;
+    margin:6px 0 0;
+    letter-spacing:6px;
+  }
+  .schoen{
+    text-align:center;
+    font-family:'Permanent Marker',cursive;
+    font-size:28px;
+    color:var(--roze);
+    margin:0 0 10px;
+  }
+  .tag{
+    text-align:center;
+    font-size:18px;
+    color:var(--donkerblauw);
+    margin:6px 0 0;
+  }
+
+  /* === Speel-modus === */
+  .play{
+    text-align:center;
+    margin:22px 0 6px;
+  }
+  .btn-play{
+    background:var(--groen);
+    border:3px solid #4d7a1f;
+    color:white;
+    width:140px; height:140px;
+    border-radius:50%;
+    font-size:72px;
+    cursor:pointer;
+    box-shadow:0 4px 0 #4d7a1f;
+    transition:transform .1s;
+    padding:0; line-height:1;
+    font-family:inherit;
+  }
+  .btn-play:active{ transform:translateY(2px); box-shadow:0 2px 0 #4d7a1f; }
+  .btn-play.replay{ background:var(--cyaan); border-color:#0d6b80; box-shadow:0 4px 0 #0d6b80; }
+
+  .status{
+    text-align:center;
+    font-size:22px;
+    margin:14px 0 4px;
+    min-height:30px;
+    color:#444;
+  }
+  .timer{
+    text-align:center;
+    font-family:'Permanent Marker',cursive;
+    font-size:34px;
+    color:var(--rood);
+    height:42px;
+  }
+  .bars{
+    display:none;
+    justify-content:center;
+    gap:5px;
+    margin:10px auto 4px;
+    height:60px;
+    align-items:flex-end;
+  }
+  .bars i{
+    display:block; width:9px; background:var(--cyaan); border-radius:3px;
+    animation:b 0.6s infinite alternate ease-in-out;
+  }
+  .bars i:nth-child(1){animation-delay:.0s; background:var(--groen)}
+  .bars i:nth-child(2){animation-delay:.08s; background:var(--geel)}
+  .bars i:nth-child(3){animation-delay:.16s; background:var(--oranje)}
+  .bars i:nth-child(4){animation-delay:.24s; background:var(--roze)}
+  .bars i:nth-child(5){animation-delay:.32s; background:var(--paars)}
+  .bars i:nth-child(6){animation-delay:.24s; background:var(--cyaan)}
+  .bars i:nth-child(7){animation-delay:.16s; background:var(--groen)}
+  .bars i:nth-child(8){animation-delay:.08s; background:var(--geel)}
+  @keyframes b{ from{ height:8px; } to{ height:56px; } }
+
+  /* === Homepage-uitleg === */
+  .uitleg{
+    margin-top:18px;
+    padding:14px 16px 6px;
+    border:2px dashed #555;
+    border-radius:6px;
+    background:#fffcec;
+  }
+  .uitleg h2{
+    margin:0 0 8px;
+    font-family:'Permanent Marker',cursive;
+    color:var(--paars);
+    font-size:26px;
+  }
+  .uitleg ol{
+    margin:6px 0 0;
+    padding-left:24px;
+    font-size:19px;
+    line-height:1.5;
+  }
+  .uitleg li::marker{ color:var(--oranje); font-weight:bold; }
+  .uitleg .winnen{
+    margin-top:10px;
+    font-size:18px;
+    color:var(--donkerblauw);
+    text-align:center;
+  }
+
+  .fb{
+    display:inline-block;
+    margin-top:14px;
+    color:#1DB954;
+    font-size:18px;
+    text-decoration:underline;
+  }
+  .err{ color:var(--rood); font-family:'Patrick Hand'; }
 </style>
 </head>
 <body>
-<div class="box">
-  <div class="dot"></div>
-  <p id="msg">…</p>
-  <p id="fallback" style="display:none">
-    Spotify wordt niet automatisch geopend.<br>
-    <a id="link" href="#">Tik hier om het nummer te starten</a>
-  </p>
+<div class="sheet">
+  <span class="doodle d1">~~~</span>
+  <span class="doodle d2">~~</span>
+  <span class="doodle d3">m~</span>
+
+  <div class="card">
+    <div class="banner">
+      <div class="h">HITSTER</div>
+      <div class="age">4+</div>
+    </div>
+    <div class="kidsbij"><span class="kids">Kids</span><span class="bij">Bij</span></div>
+    <div class="kiki">KIKI</div>
+    <div class="schoen">Schoenmakers</div>
+
+    <!-- Speel-modus (alleen zichtbaar met ?s=...) -->
+    <div id="playmode" style="display:none">
+      <div class="play">
+        <button id="btn" class="btn-play" aria-label="Afspelen">▶</button>
+      </div>
+      <div class="status" id="status">Tik op de knop om te luisteren</div>
+      <div class="timer" id="timer"></div>
+      <div class="bars" id="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="fallback" style="text-align:center"></div>
+    </div>
+
+    <!-- Homepage (alleen zichtbaar zonder code) -->
+    <div id="homepage" style="display:none">
+      <div class="uitleg">
+        <h2>Hoe speel je?</h2>
+        <ol>
+          <li>De eerste speler legt een kaartje midden op tafel (jaartal-kant boven).</li>
+          <li>Volgende speler pakt een kaart en scant de QR met de telefooncamera.</li>
+          <li>Luister naar het liedje (30 seconden) en raad het jaartal.</li>
+          <li>Leg de kaart vóór of ná de andere kaarten in de tijdlijn.</li>
+          <li>Draai om: klopt het? Ja → kaart blijft. Nee → kaart weg.</li>
+        </ol>
+        <div class="winnen">⭐ Wie als eerste 10 kaarten op de tijdlijn heeft, wint! ⭐</div>
+      </div>
+    </div>
+
+    <div class="tag">makkelijk voor kinderen</div>
+  </div>
 </div>
+
+<audio id="audio" preload="auto" playsinline></audio>
+
 <script>
-// Eenvoudige songs-database. Bewerk songs.json om nummers toe te voegen.
-fetch('songs.json', {cache:'no-store'})
-  .then(r => r.json())
-  .then(db => {
-    const code = new URLSearchParams(location.search).get('s');
-    const track = code && db[code];
-    if(!track){ document.getElementById('msg').textContent = 'Onbekende code.'; return; }
+(function(){
+  const code = new URLSearchParams(location.search).get('s');
+  const playmode = document.getElementById('playmode');
+  const homepage = document.getElementById('homepage');
+  const status   = document.getElementById('status');
+  const timer    = document.getElementById('timer');
+  const bars     = document.getElementById('bars');
+  const btn      = document.getElementById('btn');
+  const audio    = document.getElementById('audio');
+  const fallback = document.getElementById('fallback');
 
-    const uri   = 'spotify:track:' + track;            // opent de Spotify-app direct
-    const https = 'https://open.spotify.com/track/' + track; // fallback (web/installatie)
+  if(!code){
+    // === Homepage ===
+    homepage.style.display = 'block';
+    return;
+  }
 
-    // Probeer eerst de app via URI scheme — geen browser-tab met titelpreview.
-    location.replace(uri);
+  // === Speel-modus ===
+  playmode.style.display = 'block';
+  let song = null;
+  let timerId = null;
 
-    // Als de app niet opent binnen ~1.2s, val terug op de https-link.
-    setTimeout(() => {
-      document.getElementById('msg').style.display = 'none';
-      const f = document.getElementById('fallback');
-      document.getElementById('link').href = https;
-      f.style.display = 'block';
-      // Probeer ook nog automatisch:
-      location.replace(https);
-    }, 1200);
-  })
-  .catch(() => { document.getElementById('msg').textContent = 'Database niet gevonden.'; });
+  fetch('songs.json', {cache:'no-store'})
+    .then(r => { if(!r.ok) throw new Error('songs.json kon niet geladen worden ('+r.status+')'); return r.json(); })
+    .then(db => {
+      const entry = db[code];
+      if(!entry){ throw new Error('Onbekende code: '+code); }
+      // Backward-compat: oude entries waren plain strings (track-id)
+      song = (typeof entry === 'string') ? { spotify: entry } : entry;
+
+      if(song.previewUrl){
+        audio.src = song.previewUrl;
+        status.textContent = 'Klaar om te luisteren';
+      } else if(song.title && song.artist){
+        return findItunesPreview(song.title, song.artist).then(url => {
+          if(url){ audio.src = url; status.textContent = 'Klaar om te luisteren'; }
+          else showSpotifyFallback();
+        });
+      } else {
+        showSpotifyFallback();
+      }
+    })
+    .catch(err => {
+      status.innerHTML = '<span class="err">'+err.message+'</span>';
+      btn.style.display = 'none';
+    });
+
+  function findItunesPreview(title, artist){
+    // iTunes Search API ondersteunt CORS — werkt direct vanuit de browser.
+    const q = encodeURIComponent(title + ' ' + artist);
+    return fetch('https://itunes.apple.com/search?term='+q+'&entity=song&limit=15&country=NL')
+      .then(r => r.json())
+      .then(data => {
+        const want = artist.toLowerCase();
+        // Zoek beste match: artist-naam moet kloppen
+        const hit = (data.results||[]).find(r =>
+          r.artistName && r.artistName.toLowerCase().includes(want) && r.previewUrl
+        );
+        return hit ? hit.previewUrl : null;
+      })
+      .catch(() => null);
+  }
+
+  function showSpotifyFallback(){
+    if(song && song.spotify){
+      status.innerHTML = 'Geen preview gevonden.';
+      fallback.innerHTML = '<a class="fb" href="https://open.spotify.com/track/'+song.spotify+'">Open toch in Spotify →</a>';
+    } else {
+      status.innerHTML = '<span class="err">Geen audio beschikbaar voor deze code.</span>';
+    }
+    btn.style.display = 'none';
+  }
+
+  btn.addEventListener('click', () => {
+    if(!audio.src){ return; }
+    audio.currentTime = 0;
+    audio.play().then(() => {
+      btn.style.display = 'none';
+      bars.style.display = 'flex';
+      status.textContent = 'Luister... raad het jaar!';
+      let secs = 30;
+      timer.textContent = secs;
+      clearInterval(timerId);
+      timerId = setInterval(() => {
+        secs--;
+        if(secs <= 0){ clearInterval(timerId); timer.textContent = ''; }
+        else timer.textContent = secs;
+      }, 1000);
+    }).catch(err => {
+      status.innerHTML = '<span class="err">Kon niet afspelen: '+err.message+'</span>';
+    });
+  });
+
+  audio.addEventListener('ended', () => {
+    bars.style.display = 'none';
+    btn.style.display = 'inline-block';
+    btn.textContent = '↻';
+    btn.classList.add('replay');
+    status.textContent = 'Klaar! Draai de kaart om voor het antwoord.';
+    timer.textContent = '';
+  });
+})();
 </script>
 </body>
 </html>

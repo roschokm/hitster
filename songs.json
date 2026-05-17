@@ -1,5 +1,9 @@
 {
-  "_comment": "Mapping van korte code -> Spotify track-id. Gebruik add_song.py om nieuwe nummers toe te voegen.",
-  "_example": "0RHUZb0zXTARrtYjstHYcP",
-  "j3w": "0RHUZb0zXTARrtYjstHYcP"
+  "_comment": "Korte code -> {title, artist, year, spotify, previewUrl?}. previewUrl is optioneel; de pagina zoekt 'm anders zelf op via iTunes.",
+  "j3w": {
+    "title": "Spijt",
+    "artist": "Roxy Dekker",
+    "year": 2024,
+    "spotify": "0RHUZb0zXTARrtYjstHYcP"
+  }
 }
