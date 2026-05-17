@@ -260,27 +260,34 @@ def _entry_track_id(v):
     return None
 
 def add_song(title: str, artist: str, year, spotify: str, base_url: str):
-    track_id = extract_track_id(spotify)
+    spotify = (spotify or "").strip()
+    track_id = extract_track_id(spotify) if spotify else None
     db = load_json(SONGS_PATH, {})
-    # Zoek of dit nummer al bestaat
+    # Zoek of dit nummer al bestaat — op spotify-id óf op title+artist
     code = None
     for k, v in db.items():
         if k.startswith("_"): continue
-        if _entry_track_id(v) == track_id:
-            print(f"Al aanwezig als code {k!r} — entry & bestanden worden bijgewerkt.")
-            code = k
-            break
+        if isinstance(v, dict):
+            same_track = track_id and _entry_track_id(v) == track_id
+            same_meta  = (v.get("title","").lower() == title.lower()
+                          and v.get("artist","").lower() == artist.lower())
+            if same_track or same_meta:
+                print(f"Al aanwezig als code {k!r} — entry & bestanden worden bijgewerkt.")
+                code = k
+                break
     if code is None:
         used = {k for k in db.keys() if not k.startswith("_")}
         code = short_code(used)
 
-    # Schrijf altijd in de nieuwe objectvorm (title/artist/year/spotify)
-    db[code] = {
-        "title":   title,
-        "artist":  artist,
-        "year":    int(year) if str(year).isdigit() else year,
-        "spotify": track_id,
+    # Schrijf altijd in de nieuwe objectvorm. Spotify-id is optioneel.
+    entry = {
+        "title":  title,
+        "artist": artist,
+        "year":   int(year) if str(year).isdigit() else year,
     }
+    if track_id:
+        entry["spotify"] = track_id
+    db[code] = entry
     save_json(SONGS_PATH, db)
 
     redirect = f"{base_url.rstrip('/')}/?s={code}"
