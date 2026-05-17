@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<!-- Bewust nietszeggende titel: zo geeft de telefoon-preview niets weg. -->
+<title>K</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  html,body{margin:0;height:100%;background:#000;color:#fff;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center}
+  .box{text-align:center;padding:24px}
+  .dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:#1DB954;animation:p 1s infinite alternate}
+  @keyframes p{from{opacity:.3}to{opacity:1}}
+  a{color:#1DB954}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="dot"></div>
+  <p id="msg">…</p>
+  <p id="fallback" style="display:none">
+    Spotify wordt niet automatisch geopend.<br>
+    <a id="link" href="#">Tik hier om het nummer te starten</a>
+  </p>
+</div>
+<script>
+// Eenvoudige songs-database. Bewerk songs.json om nummers toe te voegen.
+fetch('songs.json', {cache:'no-store'})
+  .then(r => r.json())
+  .then(db => {
+    const code = new URLSearchParams(location.search).get('s');
+    const track = code && db[code];
+    if(!track){ document.getElementById('msg').textContent = 'Onbekende code.'; return; }
+
+    const uri   = 'spotify:track:' + track;            // opent de Spotify-app direct
+    const https = 'https://open.spotify.com/track/' + track; // fallback (web/installatie)
+
+    // Probeer eerst de app via URI scheme — geen browser-tab met titelpreview.
+    location.replace(uri);
+
+    // Als de app niet opent binnen ~1.2s, val terug op de https-link.
+    setTimeout(() => {
+      document.getElementById('msg').style.display = 'none';
+      const f = document.getElementById('fallback');
+      document.getElementById('link').href = https;
+      f.style.display = 'block';
+      // Probeer ook nog automatisch:
+      location.replace(https);
+    }, 1200);
+  })
+  .catch(() => { document.getElementById('msg').textContent = 'Database niet gevonden.'; });
+</script>
+</body>
+</html>
