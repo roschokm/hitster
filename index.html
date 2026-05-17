@@ -439,7 +439,6 @@
 
 <script>
 (function(){
-  const code = new URLSearchParams(location.search).get('s');
   const playmode = document.getElementById('playmode');
   const homepage = document.getElementById('homepage');
   const status   = document.getElementById('status');
@@ -450,23 +449,55 @@
   const audio    = document.getElementById('audio');
   const fallback = document.getElementById('fallback');
 
-  if(!code){
+  let song    = null;
+  let timerId = null;
+  let cachedDb = null;
+
+  // Initieel: bepaal modus op basis van URL
+  const initialCode = new URLSearchParams(location.search).get('s');
+  if(initialCode){
+    playmode.style.display = 'block';
+    loadSong(initialCode, /*showToast=*/true);
+  } else {
     homepage.style.display = 'block';
-    return;
   }
 
-  playmode.style.display = 'block';
-  let song = null;
-  let timerId = null;
+  // Exposeer voor de scanner zodat hij zonder page-reload kan switchen
+  window.__kik = { loadSong };
 
-  // Toon meteen "Scan succesvol" als de pagina geopend wordt met een code
-  showSuccessToast();
+  function loadSong(newCode, showToast){
+    // Zet alles terug op startstand
+    audio.pause();
+    audio.currentTime = 0;
+    clearInterval(timerId);
+    bars.style.display  = 'none';
+    btnStop.style.display = 'none';
+    btn.style.display   = 'inline-block';
+    btn.textContent     = '▶';
+    btn.classList.remove('replay');
+    fallback.innerHTML  = '';
+    timer.textContent   = '';
+    status.textContent  = '';
 
-  fetch('songs.json', {cache:'no-store'})
-    .then(r => { if(!r.ok) throw new Error('songs.json kon niet geladen worden ('+r.status+')'); return r.json(); })
-    .then(db => {
-      const entry = db[code];
-      if(!entry){ throw new Error('Onbekende code: '+code); }
+    // URL updaten zonder reload
+    const target = '?s=' + encodeURIComponent(newCode);
+    if(location.search !== target){
+      history.replaceState(null, '', target);
+    }
+    playmode.style.display = 'block';
+    homepage.style.display = 'none';
+
+    if(showToast) showSuccessToast();
+
+    const dbPromise = cachedDb
+      ? Promise.resolve(cachedDb)
+      : fetch('songs.json', {cache:'no-store'})
+          .then(r => { if(!r.ok) throw new Error('songs.json kon niet geladen worden ('+r.status+')'); return r.json(); })
+          .then(db => { cachedDb = db; return db; });
+
+    dbPromise.then(db => {
+      const entry = db[newCode];
+      if(!entry){ throw new Error('Onbekende code: '+newCode); }
       song = (typeof entry === 'string') ? { spotify: entry } : entry;
 
       if(song.previewUrl){
@@ -485,6 +516,7 @@
       status.innerHTML = '<span class="err">'+err.message+'</span>';
       btn.style.display = 'none';
     });
+  }
 
   function showSuccessToast(){
     const t = document.getElementById('successToast');
@@ -542,8 +574,19 @@
     audio.play()
       .then(() => startPlaying())
       .catch(() => {
-        // Autoplay geblokkeerd door browser — gebruiker moet zelf op play tikken
-        status.textContent = 'Tik op ▶ om te starten';
+        // Autoplay geblokkeerd door browser — vang de éérstvolgende tik op de pagina
+        // (waar dan ook) en start dan alsnog automatisch.
+        status.textContent = 'Tik ergens om te starten';
+        const onAnyTap = () => {
+          document.removeEventListener('click', onAnyTap, true);
+          document.removeEventListener('touchstart', onAnyTap, true);
+          if(audio.src && audio.paused){
+            audio.currentTime = 0;
+            audio.play().then(() => startPlaying()).catch(() => {});
+          }
+        };
+        document.addEventListener('click', onAnyTap, true);
+        document.addEventListener('touchstart', onAnyTap, true);
       });
   }
 
@@ -655,9 +698,14 @@
     try{
       const url = new URL(text, location.href);
       if(url.origin === location.origin){
+        const newCode = url.searchParams.get('s');
         closeScanner();
-        // Navigeer hard zodat de pagina opnieuw laadt voor het nieuwe nummer
-        location.href = url.toString();
+        if(newCode && window.__kik && window.__kik.loadSong){
+          // SPA-stijl wisselen — geen reload, user-gesture blijft geldig → auto-play werkt
+          window.__kik.loadSong(newCode, true);
+        } else {
+          location.href = url.toString();
+        }
         return;
       }
     }catch(e){}
