@@ -270,12 +270,18 @@
   }
   .spotify-fallback .msg{
     font-family:'Permanent Marker',cursive;
-    color:var(--paars);
-    font-size:18px;
-    margin-bottom:8px;
+    color:var(--rood);
+    font-size:22px;
+    margin-bottom:6px;
+  }
+  .spotify-fallback .sub-msg{
+    color:#222;
+    font-size:16px;
+    margin:4px 0;
   }
   .spotify-fallback .open-btn{
     display:inline-block;
+    margin-top:10px;
     background:#1DB954; color:white;
     padding:10px 20px; border-radius:30px;
     font-family:'Permanent Marker',cursive;
@@ -283,6 +289,11 @@
     text-decoration:none;
     box-shadow:0 4px 0 #0d6928;
     border:2px solid white;
+  }
+  .spotify-fallback .skip-hint{
+    margin-top:10px;
+    font-size:15px; color:#444;
+    font-style:italic;
   }
 
   /* === "Scan volgende kaart" knop === */
@@ -454,8 +465,12 @@
   let cachedDb = null;
 
   // Initieel: bepaal modus op basis van URL
-  const initialCode = new URLSearchParams(location.search).get('s');
-  if(initialCode){
+  const params = new URLSearchParams(location.search);
+  const initialCode = params.get('s');
+  const verifyMode  = params.get('verify');
+  if(verifyMode){
+    runVerify();
+  } else if(initialCode){
     playmode.style.display = 'block';
     loadSong(initialCode, /*showToast=*/true);
   } else {
@@ -541,16 +556,109 @@
 
   function showSpotifyFallback(){
     btn.style.display = 'none';
+    btnStop.style.display = 'none';
+    bars.style.display = 'none';
+    timer.textContent = '';
+    status.textContent = '';
+    const titel  = (song && song.title)  || '';
+    const artiest = (song && song.artist) || '';
+
+    let inner =
+      '<div class="msg">⚠ Geen Apple Music preview gevonden</div>' +
+      '<div class="sub-msg">"' + escapeHtml(titel) + '" — ' + escapeHtml(artiest) + '</div>' +
+      '<div class="sub-msg">Dit nummer kan niet binnen het spel afspelen.</div>';
+
     if(song && song.spotify){
-      fallback.innerHTML =
-        '<div class="spotify-fallback">' +
-          '<div class="msg">Geen Apple Music preview gevonden</div>' +
-          '<a class="open-btn" href="https://open.spotify.com/track/'+song.spotify+'" target="_blank" rel="noopener">▶ Open op Spotify</a>' +
-        '</div>';
-      status.textContent = '';
+      inner +=
+        '<a class="open-btn" href="https://open.spotify.com/track/'+song.spotify+'" target="_blank" rel="noopener">▶ Open op Spotify</a>' +
+        '<div class="skip-hint">Of leg dit kaartje opzij en scan een ander.</div>';
     } else {
-      status.innerHTML = '<span class="err">Geen audio beschikbaar voor dit nummer.</span>';
+      inner += '<div class="skip-hint">Leg dit kaartje opzij en scan een ander.</div>';
     }
+
+    fallback.innerHTML = '<div class="spotify-fallback">' + inner + '</div>';
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  /* === Verify-modus: doorloopt alle nummers en checkt of er een Apple Music preview is === */
+  function runVerify(){
+    playmode.style.display = 'none';
+    homepage.style.display = 'none';
+    const card = document.querySelector('.card');
+    const content = card.querySelector('.content');
+    content.innerHTML =
+      '<div class="hitster">HITSTER</div>' +
+      '<div style="background:rgba(255,255,255,.95); padding:14px; border-radius:8px; margin-top:14px; width:94%; max-width:380px; max-height:60vh; overflow:auto; font-size:15px;">' +
+        '<h2 style="font-family:Permanent Marker,cursive; color:var(--paars); margin:0 0 8px 0; font-size:22px;">Preview-check</h2>' +
+        '<p id="vstatus" style="margin:4px 0 8px 0">Bezig met checken...</p>' +
+        '<div id="vresults"></div>' +
+      '</div>';
+    const vstatus = document.getElementById('vstatus');
+    const vresults = document.getElementById('vresults');
+
+    fetch('songs.json', {cache:'no-store'})
+      .then(r => r.json())
+      .then(db => {
+        const entries = Object.entries(db).filter(([k,v]) =>
+          !k.startsWith('_') && typeof v === 'object' && v.title && v.artist);
+        const results = [];
+        let i = 0;
+
+        function next(){
+          if(i >= entries.length){ render(); return; }
+          const [code, info] = entries[i];
+          vstatus.textContent = 'Bezig: ' + (i+1) + '/' + entries.length + ' — ' + info.title;
+          const q = encodeURIComponent(info.title + ' ' + info.artist);
+          fetch('https://itunes.apple.com/search?term='+q+'&entity=song&limit=15&country=NL')
+            .then(r => r.json())
+            .then(data => {
+              const want = info.artist.toLowerCase();
+              const hit = (data.results||[]).find(r =>
+                r.artistName && r.artistName.toLowerCase().includes(want) && r.previewUrl
+              );
+              results.push({code, info, ok: !!hit});
+            })
+            .catch(() => results.push({code, info, ok: false, error: true}))
+            .finally(() => { i++; next(); });
+        }
+
+        function render(){
+          const ok  = results.filter(r => r.ok);
+          const bad = results.filter(r => !r.ok);
+          let html = '';
+          if(bad.length){
+            html += '<div style="background:#fee; border:2px solid var(--rood); border-radius:6px; padding:10px; margin-bottom:10px;">';
+            html += '<strong style="color:var(--rood);">❌ Geen preview (' + bad.length + '):</strong><ul style="margin:6px 0 0 18px; padding:0;">';
+            bad.forEach(r => {
+              const sp = r.info.spotify
+                ? ' <a href="https://open.spotify.com/track/'+r.info.spotify+'" target="_blank" style="color:#1DB954;">Spotify</a>'
+                : '';
+              html += '<li><code>'+r.code+'</code> — '+escapeHtml(r.info.title)+' — '+escapeHtml(r.info.artist)+sp+'</li>';
+            });
+            html += '</ul>';
+            // Kopieerbare lijst van codes — handig om naar Claude te plakken
+            const codes = bad.map(r => r.code).join(', ');
+            const compact = bad.map(r => r.code + ' (' + r.info.title + ' - ' + r.info.artist + ')').join('\n');
+            html += '<p style="margin:8px 0 4px 0; font-size:14px;"><strong>Codes om uit het spel te halen:</strong></p>';
+            html += '<textarea readonly style="width:100%; box-sizing:border-box; height:80px; font-family:monospace; font-size:13px; padding:6px;" onclick="this.select()">'+escapeHtml(compact)+'</textarea>';
+            html += '<p style="margin:4px 0 0 0; font-size:13px; color:#555;">Tik in het vakje om alles te selecteren — plak die lijst naar Claude zodat we ze uit de print-sheet halen.</p>';
+            html += '</div>';
+          }
+          html += '<div style="background:#efe; border:2px solid var(--groen); border-radius:6px; padding:10px;">';
+          html += '<strong style="color:var(--groen);">✓ Werkt ('+ok.length+'/'+results.length+')</strong>';
+          html += '</div>';
+          vstatus.textContent = 'Klaar. ' + ok.length + ' van ' + results.length + ' nummers heeft een preview.';
+          vresults.innerHTML = html;
+        }
+
+        next();
+      })
+      .catch(err => { vstatus.textContent = 'Fout: ' + err.message; });
   }
 
   function startPlaying(){

@@ -92,6 +92,18 @@ def draw_marker_text(d, xy, text, fill, font, anchor="mm", outline=None, offset=
         d.text((xy[0]+offset, xy[1]+offset), text, fill=outline, font=font, anchor=anchor)
     d.text(xy, text, fill=fill, font=font, anchor=anchor)
 
+def fit_font(text, max_width: int, max_size: int, min_size: int = 22, bold: bool = True):
+    """Vind de grootste font-size waarbij `text` in `max_width` past."""
+    for size in range(max_size, min_size - 1, -2):
+        f = get_font(size, bold=bold)
+        try:
+            w = f.getlength(text) if hasattr(f, "getlength") else f.getsize(text)[0]
+        except Exception:
+            w = max_width + 1
+        if w <= max_width:
+            return f
+    return get_font(min_size, bold=bold)
+
 def draw_notebook_bg(img):
     """Geef de achtergrond de 'schoolschrift'-lijntjes."""
     W, H = img.size
@@ -241,11 +253,12 @@ def make_card_back(title: str, artist: str, year, out: Path):
     f_year = get_font(340, bold=True)
     draw_marker_text(d, (W//2, 560), str(year), fill=DBLAUW, outline="#0a1d4d", font=f_year, anchor="mm", offset=8)
 
-    # Wit/cream band voor titel + artiest
+    # Wit/cream band voor titel + artiest — font wordt automatisch kleiner als 't niet past
     d.rectangle([(80, 820), (W-80, 1010)], fill="#fdfaf0", outline="#222", width=4)
-    f_title = get_font(82, bold=True)
+    text_max_w = (W - 80*2) - 40   # binnen de band, met wat padding
+    f_title = fit_font(title, max_width=text_max_w, max_size=82, min_size=32, bold=True)
     draw_marker_text(d, (W//2, 880), title, fill=PAARS, outline="#3a1f6b", font=f_title, anchor="mm")
-    f_artist = get_font(64, bold=True)
+    f_artist = fit_font(artist, max_width=text_max_w, max_size=64, min_size=26, bold=True)
     draw_marker_text(d, (W//2, 965), artist, fill=ROZE, outline="#8a1f4a", font=f_artist, anchor="mm")
 
     # Branding onderaan
@@ -315,7 +328,17 @@ def make_print_sheets(out_pdf: str = "print_sheets.pdf"):
     """
     db = load_json(SONGS_PATH, {})
     entries = [(k, v) for k, v in db.items()
-               if not k.startswith("_") and isinstance(v, dict)]
+               if not k.startswith("_")
+               and isinstance(v, dict)
+               and not v.get("noPreview")]
+    skipped = [(k, v) for k, v in db.items()
+               if not k.startswith("_")
+               and isinstance(v, dict)
+               and v.get("noPreview")]
+    if skipped:
+        print(f"Overgeslagen ({len(skipped)} zonder preview):")
+        for k, v in skipped:
+            print(f"  [{k}] {v.get('title')} — {v.get('artist')}")
 
     # A4 op 300 DPI = 2480 x 3508 pixels
     PAGE_W, PAGE_H = 2480, 3508
@@ -428,9 +451,9 @@ def cmd():
                 add_song(row["title"], row["artist"], row["year"], row["spotify"], base)
         return
 
-    if not all([args.title, args.artist, args.year, args.spotify]):
-        ap.error("Geef title, artist, year en spotify (URL of track-id) op, of gebruik --csv.")
-    add_song(args.title, args.artist, args.year, args.spotify, base)
+    if not all([args.title, args.artist, args.year]):
+        ap.error("Geef tenminste title, artist en year op (spotify is optioneel), of gebruik --csv.")
+    add_song(args.title, args.artist, args.year, args.spotify or "", base)
 
 if __name__ == "__main__":
     cmd()
