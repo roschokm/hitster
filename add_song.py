@@ -298,11 +298,103 @@ def add_song(title: str, artist: str, year, spotify: str, base_url: str):
     print(f"     QR:  {qr_path.name}")
     print(f"     Cards: {front.name}, {back.name}")
 
+def make_print_sheets(out_pdf: str = "print_sheets.pdf"):
+    """
+    Bouw A4-printvellen waarbij elke 'card pair' bestaat uit:
+       - bovenste helft: voorkant (normaal)
+       - onderste helft: achterkant (180° gedraaid)
+    Knip de pair uit, vouw langs de middenlijn, lijm de binnenkant, klaar.
+    Geschikt voor enkelzijdige printers.
+    """
+    db = load_json(SONGS_PATH, {})
+    entries = [(k, v) for k, v in db.items()
+               if not k.startswith("_") and isinstance(v, dict)]
+
+    # A4 op 300 DPI = 2480 x 3508 pixels
+    PAGE_W, PAGE_H = 2480, 3508
+    CARD = 760   # ~65 mm bij 300 DPI
+    COLS, ROWS = 3, 2
+    pair_w, pair_h = CARD, CARD * 2
+    grid_w, grid_h = COLS * pair_w, ROWS * pair_h
+    margin_x = (PAGE_W - grid_w) // 2
+    margin_y = (PAGE_H - grid_h) // 2
+    per_page = COLS * ROWS
+
+    pages = []
+    for page_start in range(0, len(entries), per_page):
+        page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+        d = ImageDraw.Draw(page)
+
+        # Kop bovenaan met aantal kaartjes
+        try:
+            f_head = ImageFont.truetype("/usr/share/fonts/truetype/google-fonts/Poppins-Bold.ttf", 36)
+        except Exception:
+            f_head = ImageFont.load_default()
+        pg_num = page_start // per_page + 1
+        total_pages = (len(entries) + per_page - 1) // per_page
+        d.text((margin_x, 60), f"Kikister printvel {pg_num}/{total_pages} — knip, vouw langs de stippellijn, lijm binnenkant.",
+               fill="#444", font=f_head)
+
+        for i in range(per_page):
+            idx = page_start + i
+            if idx >= len(entries):
+                break
+            code, info = entries[idx]
+            col = i % COLS
+            row = i // COLS
+            x = margin_x + col * pair_w
+            y = margin_y + row * pair_h
+
+            safe = re.sub(r"[^a-z0-9]+", "_", f"{info['artist']}_{info['title']}".lower()).strip("_")[:60]
+            front_path = CARDS_DIR / f"{code}_{safe}_front.png"
+            back_path  = CARDS_DIR / f"{code}_{safe}_back.png"
+            if not front_path.exists() or not back_path.exists():
+                print(f"WARN: bestanden missen voor {code} ({info.get('title')})")
+                continue
+
+            front_img = Image.open(front_path).convert("RGB").resize((CARD, CARD), Image.LANCZOS)
+            back_img  = Image.open(back_path).convert("RGB").resize((CARD, CARD), Image.LANCZOS).rotate(180)
+            page.paste(front_img, (x, y))
+            page.paste(back_img,  (x, y + CARD))
+
+            # Vouwlijn (stippellijn op de middenlijn van de pair)
+            fold_y = y + CARD
+            for fx in range(x, x + CARD, 30):
+                d.line([(fx, fold_y), (fx + 14, fold_y)], fill="#888", width=2)
+            # Schaarsymbool aan de linkerkant van de vouwlijn
+            sx, sy = x - 30, fold_y
+            d.line([(sx, sy-8), (sx+18, sy-2)], fill="#888", width=2)
+            d.line([(sx, sy+8), (sx+18, sy+2)], fill="#888", width=2)
+
+            # Snijrand rondom de pair
+            d.rectangle([x, y, x + CARD - 1, y + CARD * 2 - 1], outline="#bbb", width=2)
+
+        # Voet
+        try:
+            f_foot = ImageFont.truetype("/usr/share/fonts/truetype/google-fonts/Poppins-Regular.ttf", 28)
+        except Exception:
+            f_foot = ImageFont.load_default()
+        d.text((margin_x, PAGE_H - 90),
+               "Tip: print op stevig papier of plak op karton. Vouw onderkant naar achter, lijm binnenin.",
+               fill="#666", font=f_foot)
+        pages.append(page)
+
+    if not pages:
+        print("Geen nummers gevonden om af te drukken.")
+        return None
+
+    out_path = ROOT / out_pdf
+    pages[0].save(out_path, save_all=True, append_images=pages[1:], resolution=300.0)
+    print(f"OK  {len(entries)} kaartjes verdeeld over {len(pages)} A4-vel(len) → {out_path.name}")
+    return out_path
+
 def cmd():
     cfg = load_json(CONFIG_PATH, {})
     ap = argparse.ArgumentParser(description="Voeg nummers toe aan Kikister")
     ap.add_argument("--set-base-url", help="Sla de basis-URL van je site op (bv. https://naam.github.io/kikister/)")
     ap.add_argument("--csv", help="CSV met kolommen: title,artist,year,spotify")
+    ap.add_argument("--print-sheets", action="store_true",
+                    help="Genereer A4 PDF met fold-in-half kaartjes voor enkelzijdige printer")
     ap.add_argument("title", nargs="?")
     ap.add_argument("artist", nargs="?")
     ap.add_argument("year", nargs="?")
@@ -313,6 +405,10 @@ def cmd():
         cfg["base_url"] = args.set_base_url
         save_json(CONFIG_PATH, cfg)
         print(f"Basis-URL opgeslagen: {cfg['base_url']}")
+        return
+
+    if args.print_sheets:
+        make_print_sheets()
         return
 
     base = cfg.get("base_url")
