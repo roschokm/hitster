@@ -57,15 +57,16 @@ def short_code(existing: set, n=3) -> str:
 # === Kikister kleurpalet (zelfde als index.html) ===
 PAARS       = "#6e3bb3"
 BLAUW       = "#2da6df"
-GROEN       = "#8bcd3c"
-GROEN_DK    = "#4d7a1f"
-ROOD        = "#e83a3a"
+GROEN       = "#56b948"
+GROEN_DK    = "#1b4d10"
+ROOD        = "#dc2828"
+ROOD_DK     = "#6e0e0e"
 GEEL        = "#f0c800"
 ORANJE      = "#f06430"
-CYAAN       = "#1aa8c4"
+CYAAN       = "#39c5d8"
 ROZE        = "#d8327a"
-DBLAUW      = "#2147a8"
-PAPIER      = "#fefcf4"
+DBLAUW      = "#1f3da8"
+PAPIER      = "#fdfaf0"
 
 def get_font(size: int, bold=True):
     """Chunky display-font voor de kid-style look."""
@@ -99,6 +100,70 @@ def draw_notebook_bg(img):
     for y in range(60, H, 70):
         d.line([(0, y), (W, y)], fill=line_color, width=2)
 
+# === Geschilderde kleurblob-achtergrond, geïnspireerd op Kiki's tekening ===
+# Per blob: (kleur, lijst van (x,y) punten in 1200x1200 coords).
+# De volgorde bepaalt welk vlak bovenop ligt.
+PAINTED_BLOBS = [
+    # paarse hoek linksboven
+    (PAARS, [(0,0),(460,0),(440,60),(400,140),(330,180),(220,210),(80,200),(0,180)]),
+    # blauw breed bovenstuk rechts
+    (BLAUW, [(420,0),(1200,0),(1200,360),(1100,340),(980,380),(820,340),(700,400),(560,330),(420,360),(380,140)]),
+    # rode brede band onder header (vlak waar 4+ op valt)
+    (ROOD,  [(0,200),(220,260),(440,230),(660,280),(900,250),(1100,300),(1200,260),(1200,420),(0,440)]),
+    # cyaan blob links voor 'Kids'
+    (CYAAN, [(30,360),(220,340),(380,430),(420,540),(300,610),(120,600),(40,520),(0,440)]),
+    # groene blob rechts voor 'Bij'
+    (GROEN, [(600,380),(900,370),(1100,420),(1160,520),(1000,580),(820,560),(680,520),(620,460)]),
+    # paars blob midden
+    (PAARS, [(380,540),(600,560),(800,640),(770,760),(580,780),(420,720),(360,640)]),
+    # groen blob links-onder (achter KIKI)
+    (GROEN, [(0,540),(180,560),(400,640),(440,800),(280,880),(80,860),(0,720)]),
+    # rood blok rechts onder
+    (ROOD,  [(720,640),(1200,640),(1200,1100),(450,1100),(420,980),(580,880),(740,820),(770,720)]),
+    # groen blob rechtsonder
+    (GROEN, [(900,1000),(1200,1000),(1200,1200),(800,1200),(820,1100)]),
+    # rood onderkant links
+    (ROOD,  [(0,900),(220,920),(420,1000),(500,1100),(420,1200),(0,1200)]),
+]
+
+def paint_background(img):
+    """Schildert de organische gekleurde achtergrond op img."""
+    d = ImageDraw.Draw(img)
+    W, H = img.size
+    for color, pts in PAINTED_BLOBS:
+        scaled = [(int(x * W / 1200), int(y * H / 1200)) for (x,y) in pts]
+        d.polygon(scaled, fill=color)
+
+def draw_age_badge(img, xy=None):
+    """De '4+' badge rechtsboven."""
+    W, H = img.size
+    d = ImageDraw.Draw(img)
+    cx, cy = xy if xy else (W - 90, 70)
+    f = get_font(80, bold=True)
+    draw_marker_text(d, (cx, cy), "4+", fill=ROOD, outline=ROOD_DK, font=f, anchor="mm", offset=4)
+
+def draw_corner_doodles(d, W, H):
+    """Gele zigzag-krullen aan de zijkant (zoals in Kiki's nieuwe tekening, buiten de geschilderde area)."""
+    # Op deze versie zit het 'papier' alleen om het kaartje heen; we tekenen de krullen
+    # subtiel op de buitenrand van het canvas zelf is niet zinvol omdat de hele kaart geschilderd is.
+    # In plaats daarvan: gele scribble-accenten over de geschilderde blobs.
+    import math
+    def squiggle(cx, cy, scale=1.0, rot=0, color=GEEL):
+        pts = []
+        for i in range(5):
+            x = (i - 2) * 28 * scale
+            y = ((-1)**i) * 16 * scale
+            r = math.radians(rot)
+            xr = x * math.cos(r) - y * math.sin(r)
+            yr = x * math.sin(r) + y * math.cos(r)
+            pts.append((cx + xr, cy + yr))
+        for i in range(len(pts)-1):
+            d.line([pts[i], pts[i+1]], fill=color, width=10)
+    squiggle(80, 260, scale=1.2, rot=-12)
+    squiggle(60, 700, scale=1.0, rot=10)
+    squiggle(W-90, 480, scale=1.1, rot=15)
+    squiggle(W-80, 950, scale=1.0, rot=-10)
+
 def draw_doodles(d, W, H):
     """Marker-krullen aan de zijkant — slordig getekend zoals in Kiki's tekening."""
     import math
@@ -121,106 +186,71 @@ def draw_doodles(d, W, H):
     squiggle(W-60, 320, GEEL, scale=1.0, rot=15)
     squiggle(W-60, 780, GEEL, scale=1.1, rot=-12)
 
-def draw_hitster_banner(img, cy, w_frac=0.78):
-    """Tekent de HITSTER-banner: paars/blauw blok met groene chunky letters + 4+ badge."""
-    W, _ = img.size
-    bw = int(W * w_frac)
-    bh = 180
-    x0 = (W - bw) // 2
-    y0 = cy - bh // 2
-
-    # We tekenen op een aparte laag zodat we de hele banner kunnen roteren.
-    layer = Image.new("RGBA", (bw + 80, bh + 60), (0, 0, 0, 0))
-    ld = ImageDraw.Draw(layer)
-    # Linker derde paars, rechter twee derde blauw
-    split = int(bw * 0.30)
-    ld.rectangle([(40, 30), (40+split, 30+bh)], fill=PAARS)
-    ld.rectangle([(40+split, 30), (40+bw, 30+bh)], fill=BLAUW)
-    # HITSTER tekst
-    f = get_font(124, bold=True)
-    draw_marker_text(ld, (40 + bw//2, 30 + bh//2 + 8), "HITSTER",
-                     fill=GROEN, outline=GROEN_DK, font=f, anchor="mm", offset=4)
-    # 4+ badge rechtsboven
-    f_age = get_font(56, bold=True)
-    draw_marker_text(ld, (40 + bw - 36, 30 + 18), "4+",
-                     fill=ROOD, outline="#8a1f1f", font=f_age, anchor="mm", offset=3)
-
-    # Lichte rotatie (zoals in Kiki's tekening, een beetje scheef)
-    rot = layer.rotate(-2.0, resample=Image.BICUBIC, expand=True)
-    px = (W - rot.size[0]) // 2
-    py = y0 - 15
-    img.paste(rot, (px, py), rot)
-
-def draw_kiki_block(img, cy):
-    """De 'Kids Bij KIKI Schoenmakers'-tekstgroep, in viltstift-stijl."""
-    W, _ = img.size
-    d = ImageDraw.Draw(img)
-    # 'Kids Bij'
-    f_kb = get_font(72, bold=True)
-    # Twee delen in verschillende kleuren naast elkaar
-    kids_w = f_kb.getlength("Kids ")
-    bij_w  = f_kb.getlength("Bij")
-    total  = kids_w + bij_w
-    left   = (W - total) // 2
-    draw_marker_text(d, (left + kids_w/2 - 10, cy), "Kids", fill=GEEL,   outline="#8a7300", font=f_kb, anchor="mm")
-    draw_marker_text(d, (left + kids_w + bij_w/2, cy), "Bij", fill=ORANJE, outline="#a23a18", font=f_kb, anchor="mm")
-    # KIKI groot
-    f_kk = get_font(180, bold=True)
-    draw_marker_text(d, (W//2, cy + 160), "KIKI", fill=CYAAN, outline="#0d6b80", font=f_kk, anchor="mm", offset=5)
-    # Schoenmakers
-    f_sm = get_font(58, bold=True)
-    draw_marker_text(d, (W//2, cy + 280), "Schoenmakers", fill=ROZE, outline="#8a1f4a", font=f_sm, anchor="mm")
-
 def make_qr(url: str, out: Path):
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=20, border=4)
     qr.add_data(url); qr.make(fit=True)
     qr.make_image(fill_color="black", back_color="white").convert("RGB").save(out)
 
+def _draw_card_top_branding(img):
+    """HITSTER bovenaan + 4+ badge + KIKI Schoenmakers — bovenop de geschilderde achtergrond."""
+    W, _ = img.size
+    d = ImageDraw.Draw(img)
+    # HITSTER (chunky groene letters over de paars/blauwe blobs)
+    f = get_font(130, bold=True)
+    draw_marker_text(d, (W//2, 130), "HITSTER",
+                     fill=GROEN, outline=GROEN_DK, font=f, anchor="mm", offset=5)
+    # 4+ badge rechtsboven
+    f_age = get_font(72, bold=True)
+    draw_marker_text(d, (W-90, 90), "4+", fill=ROOD, outline=ROOD_DK, font=f_age, anchor="mm", offset=4)
+
 def make_card_front(qr_img: Path, out: Path):
-    """Voorkant: HITSTER-banner boven, QR-code in een wit kader in het midden, tagline onder."""
+    """Voorkant: geschilderde achtergrond, HITSTER bovenaan, witte QR in het midden, scan-tagline onder."""
     W = H = 1200
     img = Image.new("RGB", (W, H), PAPIER)
-    draw_notebook_bg(img)
+    # 1) Geschilderde kleurblob-achtergrond
+    paint_background(img)
     d = ImageDraw.Draw(img)
-    # Buitenste rand
-    d.rectangle([(20, 20), (W-20, H-20)], outline="#333", width=4)
-    # Banner bovenaan
-    draw_hitster_banner(img, cy=160)
-    # Doodles aan de zijkant
-    draw_doodles(d, W, H)
-    # QR-vak in het midden — wit met dunne rand zodat 'ie altijd scant
-    qr = Image.open(qr_img).resize((760, 760), Image.LANCZOS)
-    qx, qy = (W - 760) // 2, 290
-    d.rectangle([(qx-20, qy-20), (qx+780, qy+780)], fill="white", outline="#444", width=3)
+    # 2) Gele krullen over de blobs
+    draw_corner_doodles(d, W, H)
+    # 3) HITSTER + 4+ bovenaan
+    _draw_card_top_branding(img)
+    # 4) Wit kader in het midden waarin de QR-code staat (zodat 'ie altijd scant)
+    qr = Image.open(qr_img).resize((720, 720), Image.LANCZOS)
+    qx, qy = (W - 720) // 2, 340
+    # Schaduw + witte achtergrond + zwarte rand
+    d.rectangle([(qx-30, qy-30), (qx+750, qy+750)], fill="white", outline="#222", width=5)
     img.paste(qr, (qx, qy))
-    # Tagline
-    f_tag = get_font(46, bold=True)
-    draw_marker_text(d, (W//2, 1110), "scan om te spelen!", fill=DBLAUW, outline="#0e2255", font=f_tag, anchor="mm")
+    # 5) Tagline onderaan
+    f_tag = get_font(54, bold=True)
+    draw_marker_text(d, (W//2, 1130), "scan om te spelen!", fill="white", outline=DBLAUW, font=f_tag, anchor="mm", offset=4)
     img.save(out)
 
 def make_card_back(title: str, artist: str, year, out: Path):
-    """Achterkant: HITSTER-banner, GROOT jaartal in het midden, titel + artiest onder."""
+    """Achterkant: geschilderde achtergrond, HITSTER boven, GROOT jaartal in een witte ovaal, titel + artiest onder."""
     W = H = 1200
     img = Image.new("RGB", (W, H), PAPIER)
-    draw_notebook_bg(img)
+    paint_background(img)
     d = ImageDraw.Draw(img)
-    d.rectangle([(20, 20), (W-20, H-20)], outline="#333", width=4)
-    # Banner
-    draw_hitster_banner(img, cy=160)
-    # Doodles
-    draw_doodles(d, W, H)
-    # GROOT jaartal
-    f_year = get_font(360, bold=True)
-    draw_marker_text(d, (W//2, 520), str(year), fill=ROOD, outline="#8a1f1f", font=f_year, anchor="mm", offset=8)
-    # Titel
-    f_title = get_font(86, bold=True)
-    draw_marker_text(d, (W//2, 800), title, fill=PAARS, outline="#3a1f6b", font=f_title, anchor="mm")
-    # Artiest
-    f_artist = get_font(68, bold=True)
-    draw_marker_text(d, (W//2, 900), artist, fill=ROZE, outline="#8a1f4a", font=f_artist, anchor="mm")
-    # Mini-branding onderaan
-    f_brand = get_font(42, bold=True)
-    draw_marker_text(d, (W//2, 1120), "KIKI Schoenmakers", fill=CYAAN, outline="#0d6b80", font=f_brand, anchor="mm")
+    draw_corner_doodles(d, W, H)
+    _draw_card_top_branding(img)
+
+    # Witte "spotlight"-ovaal achter het jaartal voor leesbaarheid
+    d.ellipse([(120, 360), (W-120, 760)], fill="#fdfaf0", outline="#222", width=5)
+
+    # GROOT jaartal in donkerblauw
+    f_year = get_font(340, bold=True)
+    draw_marker_text(d, (W//2, 560), str(year), fill=DBLAUW, outline="#0a1d4d", font=f_year, anchor="mm", offset=8)
+
+    # Wit/cream band voor titel + artiest
+    d.rectangle([(80, 820), (W-80, 1010)], fill="#fdfaf0", outline="#222", width=4)
+    f_title = get_font(82, bold=True)
+    draw_marker_text(d, (W//2, 880), title, fill=PAARS, outline="#3a1f6b", font=f_title, anchor="mm")
+    f_artist = get_font(64, bold=True)
+    draw_marker_text(d, (W//2, 965), artist, fill=ROZE, outline="#8a1f4a", font=f_artist, anchor="mm")
+
+    # Branding onderaan
+    f_brand = get_font(46, bold=True)
+    draw_marker_text(d, (W//2, 1140), "KIKI Schoenmakers", fill="white", outline=CYAAN, font=f_brand, anchor="mm", offset=3)
     img.save(out)
 
 def _entry_track_id(v):
