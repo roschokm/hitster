@@ -137,6 +137,21 @@
   }
   .btn-play:active{ transform:translateY(2px); box-shadow:0 2px 0 #4d7a1f; }
   .btn-play.replay{ background:var(--cyaan); border-color:#0d6b80; box-shadow:0 4px 0 #0d6b80; }
+  .btn-stop{
+    background:var(--rood);
+    border:3px solid #8a1f1f;
+    color:white;
+    width:140px; height:140px;
+    border-radius:50%;
+    font-size:64px;
+    cursor:pointer;
+    box-shadow:0 4px 0 #8a1f1f;
+    transition:transform .1s;
+    padding:0; line-height:1;
+    font-family:inherit;
+    display:none;
+  }
+  .btn-stop:active{ transform:translateY(2px); box-shadow:0 2px 0 #8a1f1f; }
 
   .status{
     text-align:center;
@@ -231,6 +246,7 @@
     <div id="playmode" style="display:none">
       <div class="play">
         <button id="btn" class="btn-play" aria-label="Afspelen">▶</button>
+        <button id="btnStop" class="btn-stop" aria-label="Stop">■</button>
       </div>
       <div class="status" id="status">Tik op de knop om te luisteren</div>
       <div class="timer" id="timer"></div>
@@ -268,6 +284,7 @@
   const timer    = document.getElementById('timer');
   const bars     = document.getElementById('bars');
   const btn      = document.getElementById('btn');
+  const btnStop  = document.getElementById('btnStop');
   const audio    = document.getElementById('audio');
   const fallback = document.getElementById('fallback');
 
@@ -333,11 +350,29 @@
     btn.style.display = 'none';
   }
 
+  function resetToReady(replay){
+    bars.style.display = 'none';
+    btnStop.style.display = 'none';
+    btn.style.display = 'inline-block';
+    if(replay){
+      btn.textContent = '↻';
+      btn.classList.add('replay');
+      status.textContent = 'Klaar! Draai de kaart om voor het antwoord.';
+    } else {
+      btn.textContent = '▶';
+      btn.classList.remove('replay');
+      status.textContent = 'Gestopt — tik op ▶ om opnieuw te starten.';
+    }
+    timer.textContent = '';
+    clearInterval(timerId);
+  }
+
   btn.addEventListener('click', () => {
     if(!audio.src){ return; }
     audio.currentTime = 0;
     audio.play().then(() => {
       btn.style.display = 'none';
+      btnStop.style.display = 'inline-block';
       bars.style.display = 'flex';
       status.textContent = 'Luister... raad het jaar!';
       let secs = 30;
@@ -353,13 +388,14 @@
     });
   });
 
+  btnStop.addEventListener('click', () => {
+    audio.pause();
+    audio.currentTime = 0;
+    resetToReady(false);
+  });
+
   audio.addEventListener('ended', () => {
-    bars.style.display = 'none';
-    btn.style.display = 'inline-block';
-    btn.textContent = '↻';
-    btn.classList.add('replay');
-    status.textContent = 'Klaar! Draai de kaart om voor het antwoord.';
-    timer.textContent = '';
+    resetToReady(true);
   });
 })();
 </script>
