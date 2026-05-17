@@ -226,6 +226,7 @@
     font-size:17px; line-height:1.4;
   }
   .uitleg li::marker{ color:var(--oranje); font-weight:bold; }
+  .uitleg li strong{ color:var(--rood); font-weight:bold; }
   .winnen{ text-align:center; margin-top:6px; color:var(--donkerblauw); font-size:16px; }
 
   .fb{
@@ -236,6 +237,63 @@
     text-decoration:none; font-weight:bold;
   }
   .err{ color:#fff; background:var(--rood); padding:4px 8px; border-radius:4px; }
+
+  /* === "Scan volgende kaart" knop === */
+  .btn-scan{
+    display:inline-block;
+    margin-top:12px;
+    background:var(--donkerblauw);
+    color:white;
+    border:3px solid #fff;
+    box-shadow:0 4px 0 #00000040;
+    border-radius:30px;
+    padding:10px 22px;
+    font-family:'Permanent Marker',cursive;
+    font-size:22px;
+    cursor:pointer;
+  }
+  .btn-scan:active{ transform:translateY(2px); box-shadow:0 2px 0 #00000040; }
+  .btn-scan svg{ vertical-align:-4px; margin-right:6px; }
+
+  /* === Camera-overlay voor scannen === */
+  .scanner{
+    position:fixed; inset:0;
+    background:#000; z-index:9999;
+    display:none;
+    flex-direction:column; align-items:center; justify-content:center;
+  }
+  .scanner.open{ display:flex; }
+  .scanner video{
+    width:100%; max-width:600px; max-height:75vh;
+    object-fit:cover;
+    border-radius:8px;
+  }
+  .scanner .frame{
+    position:absolute; pointer-events:none;
+    width:70vmin; height:70vmin; max-width:380px; max-height:380px;
+    border:4px solid #fff;
+    border-radius:16px;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.45);
+  }
+  .scanner .hint{
+    position:absolute; bottom:24px;
+    color:#fff; font-family:'Permanent Marker',cursive;
+    font-size:22px;
+    text-shadow:1px 1px 0 #000;
+    text-align:center;
+    padding:0 20px;
+  }
+  .scanner .close-btn{
+    position:absolute; top:18px; right:18px;
+    background:var(--rood); color:white;
+    border:3px solid #fff;
+    width:56px; height:56px;
+    border-radius:50%;
+    font-size:30px; font-weight:bold;
+    cursor:pointer;
+    box-shadow:0 4px 0 #8a1f1f;
+    padding:0; line-height:1;
+  }
 </style>
 </head>
 <body>
@@ -287,6 +345,7 @@
           <div class="timer" id="timer"></div>
           <div class="bars" id="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
           <div id="fallback"></div>
+          <div><button class="btn-scan" data-scan>📷 Scan volgende kaart</button></div>
         </div>
       </div>
 
@@ -297,11 +356,14 @@
           <ol>
             <li>Leg een eerste kaart met het jaartal naar boven op tafel.</li>
             <li>Volgende speler scant een QR-code met de telefoon.</li>
-            <li>Luister naar het liedje (30 sec) en raad het jaartal.</li>
+            <li>Je hebt <strong>30 seconden</strong> om naar het liedje te luisteren en het jaartal te raden!</li>
             <li>Leg de kaart vóór of ná op de tijdlijn.</li>
             <li>Draai om: klopt het? Ja → kaart blijft. Nee → kaart weg.</li>
           </ol>
           <div class="winnen">⭐ Eerste met 10 kaarten wint! ⭐</div>
+          <div style="text-align:center;margin-top:10px">
+            <button class="btn-scan" data-scan>📷 Scan een kaart</button>
+          </div>
         </div>
       </div>
 
@@ -311,6 +373,16 @@
 </div>
 
 <audio id="audio" preload="auto" playsinline></audio>
+
+<!-- Camera scanner overlay -->
+<div class="scanner" id="scanner" aria-hidden="true">
+  <button class="close-btn" id="scanClose" aria-label="Sluiten">×</button>
+  <video id="scanVideo" autoplay muted playsinline></video>
+  <div class="frame"></div>
+  <div class="hint" id="scanHint">Richt op een QR-code</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
 <script>
 (function(){
@@ -426,6 +498,91 @@
   });
 
   audio.addEventListener('ended', () => resetToReady(true));
+})();
+
+/* === QR-scanner overlay === */
+(function(){
+  const scanner   = document.getElementById('scanner');
+  const video     = document.getElementById('scanVideo');
+  const hint      = document.getElementById('scanHint');
+  const closeBtn  = document.getElementById('scanClose');
+  const canvas    = document.createElement('canvas');
+  const ctx       = canvas.getContext('2d', { willReadFrequently: true });
+
+  let stream = null;
+  let active = false;
+  let rafId  = null;
+
+  document.querySelectorAll('[data-scan]').forEach(btn => {
+    btn.addEventListener('click', openScanner);
+  });
+  closeBtn.addEventListener('click', closeScanner);
+
+  async function openScanner(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      alert('Camera niet beschikbaar in deze browser.');
+      return;
+    }
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play().catch(()=>{});
+      scanner.classList.add('open');
+      scanner.setAttribute('aria-hidden','false');
+      hint.textContent = 'Richt op een QR-code';
+      active = true;
+      tick();
+    } catch(err){
+      alert('Kan camera niet openen: ' + (err.message || err));
+    }
+  }
+
+  function closeScanner(){
+    active = false;
+    if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+    if(stream){
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    video.srcObject = null;
+    scanner.classList.remove('open');
+    scanner.setAttribute('aria-hidden','true');
+  }
+
+  function tick(){
+    if(!active) return;
+    if(video.readyState === video.HAVE_ENOUGH_DATA && window.jsQR){
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const result = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+      if(result && result.data){
+        handleScan(result.data);
+        return;
+      }
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function handleScan(text){
+    // Alleen Kikister-URLs op onze eigen site accepteren
+    try{
+      const url = new URL(text, location.href);
+      if(url.origin === location.origin){
+        closeScanner();
+        // Navigeer hard zodat de pagina opnieuw laadt voor het nieuwe nummer
+        location.href = url.toString();
+        return;
+      }
+    }catch(e){}
+    hint.textContent = 'Geen Kikister-kaart — blijf scannen';
+    setTimeout(() => { if(active) hint.textContent = 'Richt op een QR-code'; }, 1500);
+    rafId = requestAnimationFrame(tick);
+  }
 })();
 </script>
 </body>
